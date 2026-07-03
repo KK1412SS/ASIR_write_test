@@ -1,6 +1,8 @@
 import json
 import os
 import queue
+import shutil
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -80,24 +82,116 @@ is_drawing = False
 status_queue = queue.Queue()
 
 
-def pick_gui_font_path():
-    override_path = os.environ.get("AISR_GUI_FONT_PATH", "").strip()
-    candidates = []
-    if override_path:
-        candidates.append(override_path)
+GUI_FONT_FILENAMES = [
+    "SimSun.ttf",
+    "MSYH.TTF",
+    "msyh.ttc",
+    "SimHei.ttf",
+    "Arial Unicode.ttf",
+    "NotoSansCJK-Regular.ttc",
+    "NotoSansCJK-Regular.otf",
+    "NotoSansSC-Regular.otf",
+    "SourceHanSansSC-Regular.otf",
+    "wqy-microhei.ttc",
+    "uming.ttc",
+]
 
-    candidates.extend([
+
+def get_fc_match_font_paths():
+    fc_match = shutil.which("fc-match")
+    if not fc_match:
+        return []
+
+    matched_paths = []
+    for query in ["sans:lang=zh-cn", "serif:lang=zh-cn"]:
+        try:
+            result = subprocess.run(
+                [fc_match, "-f", "%{file}\n", query],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+        except Exception:
+            continue
+
+        candidate = result.stdout.strip().splitlines()
+        if candidate:
+            matched_paths.append(candidate[0])
+    return matched_paths
+
+
+def iter_existing_font_paths(paths):
+    seen = set()
+    for raw_path in paths:
+        if not raw_path:
+            continue
+        path = Path(raw_path).expanduser()
+        if not path.is_file():
+            continue
+        normalized = str(path)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        yield normalized
+
+
+def get_project_font_candidates():
+    base_dir = Path(__file__).resolve().parent
+    search_dirs = [
+        base_dir,
+        base_dir / "assets",
+        base_dir / "fonts",
+        base_dir / "fonts" / "gui",
+        base_dir / "fonts" / "system",
+    ]
+
+    candidates = []
+    for directory in search_dirs:
+        for filename in GUI_FONT_FILENAMES:
+            candidates.append(directory / filename)
+    return candidates
+
+
+def get_system_font_candidates():
+    home = Path.home()
+    return [
+        home / "Library" / "Fonts" / "Arial Unicode.ttf",
+        home / "Library" / "Fonts" / "SimSun.ttf",
+        home / "Library" / "Fonts" / "MSYH.TTF",
+        "/home/acir/TinyWings_AISR/assets/SimSun.ttf",
+        "/home/acir/TinyWings_AISR/assets/MSYH.TTF",
+        "/home/acir/TinyWings_AISR/assets/SimHei.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
+        "/usr/share/fonts/opentype/noto/NotoSansSC-Regular.otf",
+        "/usr/share/fonts/opentype/adobe-source-han-sans/SourceHanSansSC-Regular.otf",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        "/usr/share/fonts/truetype/arphic/uming.ttc",
         "/Library/Fonts/Arial Unicode.ttf",
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
         "/System/Library/Fonts/Hiragino Sans GB.ttc",
         "/System/Library/Fonts/Supplemental/Songti.ttc",
         "/System/Library/Fonts/STHeiti Medium.ttc",
         "/System/Library/Fonts/STHeiti Light.ttc",
-    ])
-    for path in candidates:
-        if os.path.exists(path):
-            return path
-    return None
+    ]
+
+
+def get_gui_font_candidates():
+    override_path = os.environ.get("AISR_GUI_FONT_PATH", "").strip()
+    candidates = []
+    if override_path:
+        candidates.append(override_path)
+
+    candidates.extend(get_project_font_candidates())
+    candidates.extend(get_system_font_candidates())
+    candidates.extend(get_fc_match_font_paths())
+    return list(iter_existing_font_paths(candidates))
+
+
+def pick_gui_font_path():
+    candidates = get_gui_font_candidates()
+    return candidates[0] if candidates else None
 
 
 def add_chinese_font_ranges():
@@ -114,9 +208,15 @@ def add_chinese_font_ranges():
 
 
 def load_gui_fonts():
-    gui_font_path = pick_gui_font_path()
+    candidates = get_gui_font_candidates()
+    gui_font_path = candidates[0] if candidates else None
     if gui_font_path is None:
-        return None, None, None, "No compatible GUI font was found."
+        return (
+            None,
+            None,
+            None,
+            "No compatible GUI font was found. Checked project fonts, legacy Hershey paths, and common system font locations.",
+        )
 
     try:
         with dpg.font_registry():
