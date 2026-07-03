@@ -33,6 +33,7 @@ SOURCE_VARIANTS = {
 }
 
 SOURCE_URL_TEMPLATES = [
+    "https://github.com/parsimonhi/animCJK/raw/refs/heads/master/{folder}/{codepoint}.svg",
     "https://raw.githubusercontent.com/parsimonhi/animCJK/master/{folder}/{codepoint}.svg",
     "https://cdn.jsdelivr.net/gh/parsimonhi/animCJK@master/{folder}/{codepoint}.svg",
 ]
@@ -424,6 +425,7 @@ def import_text_to_font(
 
     imported = []
     skipped = []
+    errors = {}
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_char = {
@@ -444,10 +446,11 @@ def import_text_to_font(
             try:
                 imported_char, glyph = future.result()
                 completed[imported_char] = glyph
-            except Exception:
+            except Exception as exc:
                 if not skip_missing:
                     raise
                 skipped.append(char)
+                errors[char] = str(exc)
 
     for char in unique_chars:
         glyph = completed.get(char)
@@ -457,6 +460,14 @@ def import_text_to_font(
         imported.append(char)
 
     save_font(font_path, font_data)
+
+    if errors:
+        print("AnimCJK import errors:")
+        for char in skipped:
+            error = errors.get(char)
+            if error:
+                print(f"  {char}: {error}")
+
     return imported, skipped
 
 
@@ -577,6 +588,8 @@ def main():
         print("Imported:", "".join(imported))
     if skipped:
         print("Skipped:", "".join(skipped))
+    if not imported and not skipped:
+        print("No missing characters were found to import.")
 
 
 if __name__ == "__main__":
