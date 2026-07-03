@@ -12,6 +12,7 @@ from chinese_font_provider import (
     has_glyph_with_fallback,
     list_fonts,
 )
+from chinese_style_profiles import DEFAULT_STYLE_NAME, get_style_profile, transform_glyph
 from import_hanzi_writer_data import DEFAULT_FONT_PATH, ensure_text_in_font
 from robot_safety import SafetyBounds, check_position_or_raise
 
@@ -74,6 +75,7 @@ def create_chinese_text_file(
     text,
     output_file="./output/text_trail_chinese.txt",
     font_name=DEFAULT_FONT_NAME,
+    style_name=DEFAULT_STYLE_NAME,
     start_x=10.0,
     start_y=70.0,
     char_size=9.0,
@@ -87,6 +89,7 @@ def create_chinese_text_file(
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
+    get_style_profile(style_name)
     units_per_em = get_units_per_em(font_name)
     scale = char_size / units_per_em
     cursor_x = start_x
@@ -95,7 +98,7 @@ def create_chinese_text_file(
 
     with open(output_file, "w", encoding="utf-8") as f:
         f.write("# Chinese stroke text trail\n")
-        f.write(f"# font_name={font_name}, char_size={char_size}\n")
+        f.write(f"# font_name={font_name}, style_name={style_name}, char_size={char_size}\n")
         f.write(f"# char_spacing={char_spacing}, line_spacing={line_spacing}\n")
         f.write(f"# auto_wrap={auto_wrap}, max_line_width={max_line_width}\n")
 
@@ -121,7 +124,10 @@ def create_chinese_text_file(
                     cursor_x += space_advance
                 continue
 
-            glyph = get_glyph_with_fallback(font_name, ch)
+            glyph = transform_glyph(
+                get_glyph_with_fallback(font_name, ch),
+                style_name=style_name,
+            )
             glyph_advance = glyph.advance * scale + char_spacing
 
             if (
@@ -279,6 +285,7 @@ def draw_chinese_text_with_robot(
     text,
     output_file="./output/text_trail_chinese.txt",
     font_name=DEFAULT_FONT_NAME,
+    style_name=DEFAULT_STYLE_NAME,
     start_x=10.0,
     start_y=70.0,
     char_size=9.0,
@@ -295,6 +302,8 @@ def draw_chinese_text_with_robot(
     auto_wrap=True,
     max_line_width=None,
 ):
+    get_style_profile(style_name)
+
     if auto_import_missing:
         imported, skipped = auto_import_missing_hanziwriter_glyphs(
             text=text,
@@ -334,6 +343,7 @@ def draw_chinese_text_with_robot(
         text=text,
         output_file=output_file,
         font_name=font_name,
+        style_name=style_name,
         start_x=start_x,
         start_y=start_y,
         char_size=char_size,
@@ -353,6 +363,7 @@ def draw_chinese_text_with_robot(
     )
 
     print(f"font_name = {font_name}")
+    print(f"style_name = {style_name}")
     print(f"VERTICAL_TILT_FACTOR = {VERTICAL_TILT_FACTOR}")
     print(f"HORIZONTAL_TILT_FACTOR = {HORIZONTAL_TILT_FACTOR}")
     print(f"x0 = {x0}, y0 = {y0}, image_size = {image_size}")

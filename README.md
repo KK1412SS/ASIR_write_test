@@ -37,3 +37,7 @@ python3 import_hanzi_writer_data.py --text-file ./common_hanzi_seed.txt --skip-m
 
 # Dry run a Chinese writing path without moving the robot
 python3 write_chinese.py
+
+# Direct Chinese writing with selectable style profiles
+# Available styles: regular, kaiti, heiti, songti
+python3 -c "from write_chinese import draw_chinese_text_with_robot; draw_chinese_text_with_robot('你好，请问今天有时间吗？', font_name='hanziwriter', style_name='kaiti', x0=290.0, y0=-220.0, dry_run=True, auto_import_missing=True)"
