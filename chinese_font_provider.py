@@ -14,6 +14,16 @@ class ChineseGlyph:
     strokes: tuple
 
 
+def is_hanzi_character(char):
+    codepoint = ord(char)
+    return (
+        0x3400 <= codepoint <= 0x4DBF
+        or 0x4E00 <= codepoint <= 0x9FFF
+        or 0xF900 <= codepoint <= 0xFAFF
+        or 0x20000 <= codepoint <= 0x2EBEF
+    )
+
+
 def _font_path(font_name):
     return FONT_DIR / f"{font_name}.json"
 
@@ -69,6 +79,9 @@ def has_glyph_with_fallback(font_name, char, fallback_font_names=FALLBACK_PUNCTU
     if has_glyph(font_name, char):
         return True
 
+    if is_hanzi_character(char):
+        return False
+
     for fallback_font_name in fallback_font_names:
         if fallback_font_name == font_name:
             continue
@@ -101,6 +114,8 @@ def get_glyph_with_fallback(font_name, char, fallback_font_names=FALLBACK_PUNCTU
     try:
         return get_glyph(font_name, char)
     except KeyError:
+        if is_hanzi_character(char):
+            raise
         for fallback_font_name in fallback_font_names:
             if fallback_font_name == font_name:
                 continue

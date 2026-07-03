@@ -2,11 +2,13 @@ import argparse
 import json
 import math
 import re
+import socket
+import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from chinese_font_provider import clear_font_cache
 
@@ -33,15 +35,22 @@ SOURCE_VARIANTS = {
 }
 
 SOURCE_URL_TEMPLATES = [
-    "https://github.com/parsimonhi/animCJK/raw/refs/heads/master/{folder}/{codepoint}.svg",
     "https://raw.githubusercontent.com/parsimonhi/animCJK/master/{folder}/{codepoint}.svg",
     "https://cdn.jsdelivr.net/gh/parsimonhi/animCJK@master/{folder}/{codepoint}.svg",
+    "https://github.com/parsimonhi/animCJK/raw/refs/heads/master/{folder}/{codepoint}.svg",
 ]
 
 FONT_DIR = Path(__file__).resolve().parent / "fonts" / "chinese"
 DEFAULT_FONT_PATHS = {
     variant_name: FONT_DIR / f"{variant['font_name']}.json"
     for variant_name, variant in SOURCE_VARIANTS.items()
+}
+DEFAULT_TIMEOUT_SECONDS = 90.0
+DEFAULT_RETRY_ATTEMPTS = 3
+DEFAULT_MAX_WORKERS = 2
+REQUEST_HEADERS = {
+    "User-Agent": "AISR-AnimCJK-Importer/1.0",
+    "Accept": "image/svg+xml,text/plain;q=0.9,*/*;q=0.8",
 }
 
 TOKEN_RE = re.compile(r"[MmZzLlHhVvCcSsQqTtAa]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
@@ -335,19 +344,32 @@ def find_missing_chars(text, font_path, variant_name):
     return missing
 
 
-def fetch_animcjk_svg(char, variant_name):
+def read_url_text(url, timeout):
+    request = Request(url, headers=REQUEST_HEADERS)
+    with urlopen(request, timeout=timeout) as response:
+        content_type = response.headers.get_content_charset() or "utf-8"
+        return response.read().decode(content_type, errors="replace")
+
+
+def fetch_animcjk_svg(char, variant_name, timeout=DEFAULT_TIMEOUT_SECONDS, retries=DEFAULT_RETRY_ATTEMPTS):
     variant = SOURCE_VARIANTS[variant_name]
     codepoint = ord(char)
     errors = []
-    for template in SOURCE_URL_TEMPLATES:
-        url = template.format(folder=variant["folder"], codepoint=codepoint)
-        try:
-            with urlopen(url, timeout=30) as response:
-                return response.read().decode("utf-8")
-        except HTTPError as exc:
-            errors.append(f"{url} -> HTTP {exc.code}")
-        except URLError as exc:
-            errors.append(f"{url} -> {exc}")
+    retries = max(1, int(retries))
+    timeout = max(1.0, float(timeout))
+
+    for attempt in range(1, retries + 1):
+        for template in SOURCE_URL_TEMPLATES:
+            url = template.format(folder=variant["folder"], codepoint=codepoint)
+            try:
+                return read_url_text(url, timeout=timeout)
+            except HTTPError as exc:
+                errors.append(f"attempt {attempt}: {url} -> HTTP {exc.code}")
+            except (URLError, socket.timeout, TimeoutError, OSError) as exc:
+                errors.append(f"attempt {attempt}: {url} -> {exc}")
+
+        if attempt < retries:
+            time.sleep(min(1.5 * attempt, 3.0))
 
     raise RuntimeError(
         f"Failed to fetch AnimCJK SVG for '{char}' ({variant_name}). Tried: "
@@ -388,8 +410,13 @@ def glyph_from_animcjk_svg(char, svg_text, min_distance, epsilon, curve_steps):
     }
 
 
-def import_single_character(char, variant_name, min_distance, epsilon, curve_steps):
-    svg_text = fetch_animcjk_svg(char, variant_name)
+def import_single_character(char, variant_name, min_distance, epsilon, curve_steps, timeout, retries):
+    svg_text = fetch_animcjk_svg(
+        char,
+        variant_name,
+        timeout=timeout,
+        retries=retries,
+    )
     glyph = glyph_from_animcjk_svg(
         char,
         svg_text,
@@ -409,6 +436,8 @@ def import_text_to_font(
     curve_steps,
     skip_missing,
     max_workers,
+    timeout,
+    retries,
 ):
     unique_chars = []
     seen = set()
@@ -427,30 +456,53 @@ def import_text_to_font(
     skipped = []
     errors = {}
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_char = {
-            executor.submit(
-                import_single_character,
-                char,
-                variant_name,
-                min_distance,
-                epsilon,
-                curve_steps,
-            ): char
-            for char in unique_chars
-        }
+    max_workers = max(1, int(max_workers))
+    completed = {}
 
-        completed = {}
-        for future in as_completed(future_to_char):
-            char = future_to_char[future]
+    if max_workers == 1:
+        for char in unique_chars:
             try:
-                imported_char, glyph = future.result()
+                imported_char, glyph = import_single_character(
+                    char,
+                    variant_name,
+                    min_distance,
+                    epsilon,
+                    curve_steps,
+                    timeout,
+                    retries,
+                )
                 completed[imported_char] = glyph
             except Exception as exc:
                 if not skip_missing:
                     raise
                 skipped.append(char)
                 errors[char] = str(exc)
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_char = {
+                executor.submit(
+                    import_single_character,
+                    char,
+                    variant_name,
+                    min_distance,
+                    epsilon,
+                    curve_steps,
+                    timeout,
+                    retries,
+                ): char
+                for char in unique_chars
+            }
+
+            for future in as_completed(future_to_char):
+                char = future_to_char[future]
+                try:
+                    imported_char, glyph = future.result()
+                    completed[imported_char] = glyph
+                except Exception as exc:
+                    if not skip_missing:
+                        raise
+                    skipped.append(char)
+                    errors[char] = str(exc)
 
     for char in unique_chars:
         glyph = completed.get(char)
@@ -479,7 +531,9 @@ def ensure_text_in_animcjk_font(
     epsilon=4.0,
     curve_steps=12,
     skip_missing=True,
-    max_workers=8,
+    max_workers=DEFAULT_MAX_WORKERS,
+    timeout=DEFAULT_TIMEOUT_SECONDS,
+    retries=DEFAULT_RETRY_ATTEMPTS,
 ):
     if variant_name not in SOURCE_VARIANTS:
         raise KeyError(f"Unknown AnimCJK variant: {variant_name}")
@@ -501,6 +555,8 @@ def ensure_text_in_animcjk_font(
         curve_steps=curve_steps,
         skip_missing=skip_missing,
         max_workers=max_workers,
+        timeout=timeout,
+        retries=retries,
     )
 
 
@@ -553,8 +609,20 @@ def parse_args():
     parser.add_argument(
         "--max-workers",
         type=int,
-        default=8,
+        default=DEFAULT_MAX_WORKERS,
         help="Number of parallel downloads during bulk import.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        help="Per-request timeout in seconds.",
+    )
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=DEFAULT_RETRY_ATTEMPTS,
+        help="How many fetch rounds to try across all mirror URLs.",
     )
     return parser.parse_args()
 
@@ -581,6 +649,8 @@ def main():
         curve_steps=args.curve_steps,
         skip_missing=args.skip_missing,
         max_workers=args.max_workers,
+        timeout=args.timeout,
+        retries=args.retries,
     )
 
     print(f"Imported {len(imported)} character(s) into {font_path}.")
