@@ -33,6 +33,10 @@ def _load_font_data(font_name):
     return data
 
 
+def clear_font_cache():
+    _load_font_data.cache_clear()
+
+
 def list_fonts():
     return sorted(path.stem for path in FONT_DIR.glob("*.json"))
 

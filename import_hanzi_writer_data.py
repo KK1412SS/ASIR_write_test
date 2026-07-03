@@ -7,6 +7,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import urlopen
 
+from chinese_font_provider import clear_font_cache
+
 
 SOURCE_URLS = [
     "https://cdn.jsdelivr.net/npm/hanzi-writer-data@latest/{encoded}.json",
@@ -163,6 +165,7 @@ def save_font(font_path, data):
     with font_path.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
+    clear_font_cache()
 
 
 def import_text_to_font(text, font_path, min_distance, epsilon, skip_missing, max_workers):
