@@ -81,14 +81,19 @@ status_queue = queue.Queue()
 
 
 def pick_gui_font_path():
-    candidates = [
-        "/Library/Fonts/Arial Unicode.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    override_path = os.environ.get("AISR_GUI_FONT_PATH", "").strip()
+    candidates = []
+    if override_path:
+        candidates.append(override_path)
+
+    candidates.extend([
         "/System/Library/Fonts/Hiragino Sans GB.ttc",
         "/System/Library/Fonts/Supplemental/Songti.ttc",
         "/System/Library/Fonts/STHeiti Medium.ttc",
         "/System/Library/Fonts/STHeiti Light.ttc",
-    ]
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    ])
     for path in candidates:
         if os.path.exists(path):
             return path
@@ -96,11 +101,36 @@ def pick_gui_font_path():
 
 
 def add_chinese_font_ranges():
+    dpg.add_font_range_hint(dpg.mvFontRangeHint_Default)
+    dpg.add_font_range_hint(dpg.mvFontRangeHint_Chinese_Simplified_Common)
+    dpg.add_font_range_hint(dpg.mvFontRangeHint_Chinese_Full)
     dpg.add_font_range(0x0020, 0x00FF)
+    dpg.add_font_range(0x3400, 0x4DBF)
     dpg.add_font_range(0x2000, 0x206F)
     dpg.add_font_range(0x3000, 0x303F)
     dpg.add_font_range(0x4E00, 0x9FFF)
+    dpg.add_font_range(0xF900, 0xFAFF)
     dpg.add_font_range(0xFF00, 0xFFEF)
+
+
+def load_gui_fonts():
+    gui_font_path = pick_gui_font_path()
+    if gui_font_path is None:
+        return None, None, None, "No compatible GUI font was found."
+
+    try:
+        with dpg.font_registry():
+            with dpg.font(gui_font_path, size=30) as default_font:
+                add_chinese_font_ranges()
+
+            with dpg.font(gui_font_path, size=22) as small_font:
+                add_chinese_font_ranges()
+
+        print(f"Using GUI font: {gui_font_path}")
+        return gui_font_path, default_font, small_font, f"GUI font: {gui_font_path}"
+    except Exception as exc:
+        print(f"Failed to load GUI font '{gui_font_path}': {exc}")
+        return None, None, None, f"Failed to load GUI font: {gui_font_path} ({exc})"
 
 
 def set_status(text):
@@ -360,20 +390,12 @@ def refresh_mode_ui(sender=None, app_data=None):
 def main():
     dpg.create_context()
 
-    default_font = None
-    small_font = None
-    gui_font_path = pick_gui_font_path()
-    if gui_font_path is not None:
-        with dpg.font_registry():
-            with dpg.font(gui_font_path, size=30) as default_font:
-                add_chinese_font_ranges()
-
-            with dpg.font(gui_font_path, size=22) as small_font:
-                add_chinese_font_ranges()
-    else:
+    gui_font_path, default_font, small_font, gui_font_message = load_gui_fonts()
+    if gui_font_path is None:
         set_status(
             "No GUI font with Chinese coverage was found.\n"
-            "Chinese text display may be incomplete."
+            "Chinese text display may be incomplete.\n"
+            "Set AISR_GUI_FONT_PATH to a working TTF/TTC font if needed."
         )
 
     with dpg.theme() as global_theme:
@@ -415,6 +437,13 @@ def main():
             wrap=1100,
         )
 
+        dpg.add_text(
+            default_value=gui_font_message,
+            tag="font_info_text",
+            pos=[40, 170],
+            wrap=1100,
+        )
+
         with dpg.group(tag="mode_group", horizontal=True):
             dpg.add_combo(
                 items=WRITING_MODES,
@@ -433,7 +462,7 @@ def main():
         dpg.set_item_pos("mode_group", [40, 195])
 
         with dpg.group(tag="font_group", horizontal=True, show=False):
-            dpg.add_text(default_value="字体 / Font:")
+            dpg.add_text(default_value="字体 / Font:", tag="font_label")
             dpg.add_combo(
                 items=CHINESE_FONT_NAMES if CHINESE_FONT_NAMES else [""],
                 default_value=DEFAULT_CHINESE_FONT,
@@ -494,11 +523,20 @@ def main():
         if default_font is not None:
             dpg.bind_font(default_font)
         if small_font is not None:
+            dpg.bind_item_font("main_prompt", small_font)
             dpg.bind_item_font("sub_prompt", small_font)
+            dpg.bind_item_font("font_info_text", small_font)
+            dpg.bind_item_font("dry_run_checkbox", small_font)
             dpg.bind_item_font("input_text", small_font)
+            dpg.bind_item_font("start_button", small_font)
+            dpg.bind_item_font("clear_button", small_font)
+            dpg.bind_item_font("exit_button", small_font)
+            dpg.bind_item_font("preview_label", small_font)
             dpg.bind_item_font("preview_text", small_font)
+            dpg.bind_item_font("status_label", small_font)
             dpg.bind_item_font("status_text", small_font)
             dpg.bind_item_font("mode_select", small_font)
+            dpg.bind_item_font("font_label", small_font)
             if dpg.does_item_exist("font_select"):
                 dpg.bind_item_font("font_select", small_font)
 
