@@ -17,7 +17,7 @@ from chinese_style_profiles import (
 )
 from letter_strokes import LETTER_STROKES
 from write_chinese import (
-    auto_import_missing_hanziwriter_glyphs,
+    auto_import_missing_chinese_glyphs,
     draw_chinese_text_with_robot,
     validate_chinese_text,
 )
@@ -38,6 +38,7 @@ MODE_CHINESE = "Chinese Strokes"
 WRITING_MODES = [MODE_ENGLISH, MODE_CHINESE]
 
 ALL_CHINESE_FONT_NAMES = list_fonts()
+AUTO_IMPORTABLE_CHINESE_FONT_NAMES = {"hanziwriter", "animcjk_zhhans", "animcjk_zhhant"}
 
 
 def get_font_glyph_count(font_name):
@@ -53,7 +54,7 @@ def get_gui_chinese_font_names():
     names = []
     for font_name in ALL_CHINESE_FONT_NAMES:
         glyph_count = get_font_glyph_count(font_name)
-        if font_name == "hanziwriter" or glyph_count >= 100:
+        if font_name in AUTO_IMPORTABLE_CHINESE_FONT_NAMES or glyph_count >= 100:
             names.append(font_name)
     return names
 
@@ -330,12 +331,12 @@ def draw_worker(text, mode, font_name, style_name, dry_run):
     try:
         is_drawing = True
         if mode == MODE_CHINESE:
-            if font_name == "hanziwriter":
+            if font_name in AUTO_IMPORTABLE_CHINESE_FONT_NAMES:
                 set_status(
                     f"检查并补全中文笔画缓存（字体: {font_name}, 风格: {style_name}）...\n"
                     f"Checking and extending cached Hanzi strokes ({font_name}, style {style_name})..."
                 )
-                imported, skipped = auto_import_missing_hanziwriter_glyphs(
+                imported, skipped = auto_import_missing_chinese_glyphs(
                     text=text,
                     font_name=font_name,
                     skip_missing=True,
@@ -434,7 +435,7 @@ def start_writing_callback(sender=None, app_data=None):
             set_status("没有可用的中文笔画字体数据。\nNo Chinese stroke fonts are available.")
             return
         supported_text = get_chinese_supported_chars_text(font_name, style_name)
-        if font_name == "hanziwriter":
+        if font_name in AUTO_IMPORTABLE_CHINESE_FONT_NAMES:
             unsupported = []
         else:
             unsupported = validate_chinese_text(draw_text, font_name)

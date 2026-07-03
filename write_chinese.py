@@ -13,6 +13,7 @@ from chinese_font_provider import (
     list_fonts,
 )
 from chinese_style_profiles import DEFAULT_STYLE_NAME, get_style_profile, transform_glyph
+from import_animcjk_data import ensure_text_in_animcjk_font
 from import_hanzi_writer_data import DEFAULT_FONT_PATH, ensure_text_in_font
 from robot_safety import SafetyBounds, check_position_or_raise
 
@@ -25,6 +26,11 @@ HORIZONTAL_TILT_CENTER = (-0.35 + -0.15) / 2.0
 
 AVAILABLE_CHINESE_FONTS = set(list_fonts())
 DEFAULT_FONT_NAME = "hanziwriter" if "hanziwriter" in AVAILABLE_CHINESE_FONTS else "kaiti"
+ANIMCJK_FONT_VARIANTS = {
+    "animcjk_zhhans": "zhhans",
+    "animcjk_zhhant": "zhhant",
+}
+AUTO_IMPORTABLE_FONT_NAMES = {"hanziwriter", *ANIMCJK_FONT_VARIANTS.keys()}
 
 
 def validate_chinese_text(text, font_name):
@@ -37,8 +43,8 @@ def validate_chinese_text(text, font_name):
     return sorted(set(unsupported))
 
 
-def auto_import_missing_hanziwriter_glyphs(text, font_name, skip_missing=True):
-    if font_name != "hanziwriter":
+def auto_import_missing_chinese_glyphs(text, font_name, skip_missing=True):
+    if font_name not in AUTO_IMPORTABLE_FONT_NAMES:
         return [], []
 
     unresolved_chars = []
@@ -55,9 +61,25 @@ def auto_import_missing_hanziwriter_glyphs(text, font_name, skip_missing=True):
     if not unresolved_chars:
         return [], []
 
-    return ensure_text_in_font(
-        text="".join(unresolved_chars),
-        font_path=DEFAULT_FONT_PATH,
+    unresolved_text = "".join(unresolved_chars)
+    if font_name == "hanziwriter":
+        return ensure_text_in_font(
+            text=unresolved_text,
+            font_path=DEFAULT_FONT_PATH,
+            skip_missing=skip_missing,
+        )
+
+    return ensure_text_in_animcjk_font(
+        text=unresolved_text,
+        variant_name=ANIMCJK_FONT_VARIANTS[font_name],
+        skip_missing=skip_missing,
+    )
+
+
+def auto_import_missing_hanziwriter_glyphs(text, font_name, skip_missing=True):
+    return auto_import_missing_chinese_glyphs(
+        text=text,
+        font_name=font_name,
         skip_missing=skip_missing,
     )
 
@@ -305,7 +327,7 @@ def draw_chinese_text_with_robot(
     get_style_profile(style_name)
 
     if auto_import_missing:
-        imported, skipped = auto_import_missing_hanziwriter_glyphs(
+        imported, skipped = auto_import_missing_chinese_glyphs(
             text=text,
             font_name=font_name,
             skip_missing=True,
@@ -340,18 +362,18 @@ def draw_chinese_text_with_robot(
         )
 
     _, line_count = create_chinese_text_file(
-        text=text,
-        output_file=output_file,
-        font_name=font_name,
-        style_name=style_name,
-        start_x=start_x,
-        start_y=start_y,
-        char_size=char_size,
-        char_spacing=char_spacing,
-        line_spacing=line_spacing,
-        auto_wrap=auto_wrap,
-        max_line_width=max_line_width,
-    )
+            text=text,
+            output_file=output_file,
+            font_name=font_name,
+            style_name=style_name,
+            start_x=start_x,
+            start_y=start_y,
+            char_size=char_size,
+            char_spacing=char_spacing,
+            line_spacing=line_spacing,
+            auto_wrap=auto_wrap,
+            max_line_width=max_line_width,
+        )
 
     data = read_trail_and_convert_to_robot(
         output_file=output_file,

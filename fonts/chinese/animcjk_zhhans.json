@@ -1,0 +1,7 @@
+{
+  "font_name": "animcjk_zhhans",
+  "display_name": "AnimCJK Simplified Chinese",
+  "description": "Imported from AnimCJK simplified Chinese SVG median paths. Uses language-specific stroke medians and stroke order.",
+  "units_per_em": 1024,
+  "glyphs": {}
+}
