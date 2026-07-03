@@ -1,0 +1,7 @@
+调整速度在arm_trigger/xarm_sdk/xarm_control.py第11行
+
+最大限制速度在base.py第60 61行调整
+
+初始如下：
+self._min_joint_speed, self._max_joint_speed = 0.01, 4.0  # rad/s
+self._min_joint_acc, self._max_joint_acc = 0.01, 20.0  # rad/s^2
