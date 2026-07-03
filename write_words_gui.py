@@ -87,12 +87,12 @@ def pick_gui_font_path():
         candidates.append(override_path)
 
     candidates.extend([
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
         "/System/Library/Fonts/Hiragino Sans GB.ttc",
         "/System/Library/Fonts/Supplemental/Songti.ttc",
         "/System/Library/Fonts/STHeiti Medium.ttc",
         "/System/Library/Fonts/STHeiti Light.ttc",
-        "/Library/Fonts/Arial Unicode.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
     ])
     for path in candidates:
         if os.path.exists(path):
@@ -127,7 +127,13 @@ def load_gui_fonts():
                 add_chinese_font_ranges()
 
         print(f"Using GUI font: {gui_font_path}")
-        return gui_font_path, default_font, small_font, f"GUI font: {gui_font_path}"
+        font_kind = Path(gui_font_path).suffix.lower()
+        return (
+            gui_font_path,
+            default_font,
+            small_font,
+            f"GUI font: {gui_font_path} ({font_kind or 'unknown'})",
+        )
     except Exception as exc:
         print(f"Failed to load GUI font '{gui_font_path}': {exc}")
         return None, None, None, f"Failed to load GUI font: {gui_font_path} ({exc})"
