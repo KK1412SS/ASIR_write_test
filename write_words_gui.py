@@ -24,8 +24,20 @@ from write_words import draw_text_with_robot
 screen_width = 1280
 screen_height = 720
 
-white_color = (255, 255, 255)
-pku_red_color = (139, 0, 18)
+paper_bg_color = (244, 238, 230)
+card_bg_color = (252, 249, 245)
+ink_color = (72, 42, 36)
+muted_ink_color = (113, 88, 80)
+accent_color = (139, 0, 18)
+accent_hover_color = (170, 28, 46)
+accent_active_color = (116, 0, 14)
+soft_accent_color = (232, 214, 209)
+secondary_button_color = (232, 224, 215)
+secondary_button_hover_color = (217, 206, 195)
+secondary_button_active_color = (205, 194, 183)
+danger_button_color = (111, 88, 83)
+danger_button_hover_color = (132, 106, 100)
+danger_button_active_color = (92, 70, 66)
 
 OUTPUT_FILE_ENGLISH = "./output/text_trail.txt"
 OUTPUT_FILE_CHINESE = "./output/text_trail_chinese.txt"
@@ -235,6 +247,36 @@ def get_current_chinese_font():
     if dpg.does_item_exist("font_select"):
         return dpg.get_value("font_select")
     return DEFAULT_CHINESE_FONT
+
+
+def get_mode_title(mode):
+    if mode == MODE_CHINESE:
+        return "Chinese Stroke Writer"
+    return "English Stroke Writer"
+
+
+def get_mode_subtitle(mode, font_name):
+    if mode == MODE_CHINESE:
+        glyph_count = len(list_supported_chars(font_name)) if CHINESE_FONT_AVAILABLE else 0
+        return f"{font_name} · {glyph_count} cached glyphs"
+    return "Latin letters, numbers, and symbols"
+
+
+def get_mode_note(mode, font_name):
+    if mode == MODE_CHINESE:
+        glyph_count = len(list_supported_chars(font_name)) if CHINESE_FONT_AVAILABLE else 0
+        return (
+            f"Chinese stroke source: {font_name}\n"
+            f"Regular style · {glyph_count} cached glyphs"
+        )
+    return "Robot output uses uppercase Latin strokes."
+
+
+def get_compact_gui_font_message(gui_font_message):
+    if gui_font_message.startswith("GUI font: "):
+        font_path = gui_font_message[len("GUI font: "):].split(" (", 1)[0]
+        return f"UI font: {Path(font_path).name}"
+    return gui_font_message
 
 
 def get_english_supported_chars_text():
@@ -457,30 +499,24 @@ def refresh_mode_ui(sender=None, app_data=None):
     mode = get_current_mode()
     font_name = get_current_chinese_font()
 
+    dpg.set_value("main_prompt", get_mode_title(mode))
+    dpg.set_value("sub_prompt", get_mode_subtitle(mode, font_name))
+
     if mode == MODE_CHINESE:
-        dpg.set_value("main_prompt", "请输入要写的中文 / Type the Chinese text to write")
-        dpg.set_value(
-            "sub_prompt",
-            "当前中文模式 / Chinese writing mode:\n"
-            + get_chinese_supported_chars_text(font_name),
-        )
         dpg.configure_item("font_group", show=True)
         dpg.configure_item("input_text", hint="Example: 你好！")
+        dpg.set_value("mode_note_text", get_mode_note(mode, font_name))
     else:
-        dpg.set_value("main_prompt", "请输入要写的英文单词 / Type the text to write")
-        dpg.set_value(
-            "sub_prompt",
-            "当前支持绘制 / Supported characters:\n"
-            + get_english_supported_chars_text(),
-        )
         dpg.configure_item("font_group", show=False)
         dpg.configure_item("input_text", hint="Example: HELLO & ROBOT 2026!")
+        dpg.set_value("mode_note_text", get_mode_note(mode, font_name))
 
 
 def main():
     dpg.create_context()
 
     gui_font_path, default_font, small_font, gui_font_message = load_gui_fonts()
+    gui_font_message = get_compact_gui_font_message(gui_font_message)
     if gui_font_path is None:
         set_status(
             "No GUI font with Chinese coverage was found.\n"
@@ -490,19 +526,69 @@ def main():
 
     with dpg.theme() as global_theme:
         with dpg.theme_component(dpg.mvAll):
-            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, white_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_Text, pku_red_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_Button, white_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 3, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, paper_bg_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Text, ink_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Border, soft_accent_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 1, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 20, 20, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 12, 12, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 12, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 18, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 0, category=dpg.mvThemeCat_Core)
 
     dpg.bind_theme(global_theme)
+
+    with dpg.theme() as panel_theme:
+        with dpg.theme_component(dpg.mvChildWindow):
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, card_bg_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Border, soft_accent_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_ChildBorderSize, 1, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 18, 18, category=dpg.mvThemeCat_Core)
 
     with dpg.theme() as input_theme:
         with dpg.theme_component(dpg.mvInputText):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255), category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, pku_red_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, pku_red_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, pku_red_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, accent_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, accent_hover_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, accent_active_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Border, accent_active_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 14, 12, category=dpg.mvThemeCat_Core)
+
+    with dpg.theme() as primary_button_theme:
+        with dpg.theme_component(dpg.mvButton):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255), category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Button, accent_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, accent_hover_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, accent_active_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 14, 12, category=dpg.mvThemeCat_Core)
+
+    with dpg.theme() as secondary_button_theme:
+        with dpg.theme_component(dpg.mvButton):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, ink_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Button, secondary_button_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, secondary_button_hover_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, secondary_button_active_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 14, 12, category=dpg.mvThemeCat_Core)
+
+    with dpg.theme() as danger_button_theme:
+        with dpg.theme_component(dpg.mvButton):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255), category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Button, danger_button_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, danger_button_hover_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, danger_button_active_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 14, 12, category=dpg.mvThemeCat_Core)
+
+    with dpg.theme() as selector_theme:
+        with dpg.theme_component(dpg.mvCombo):
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, card_bg_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, soft_accent_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, soft_accent_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Text, ink_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Border, soft_accent_color, category=dpg.mvThemeCat_Core)
+
+    with dpg.theme() as subtle_text_theme:
+        with dpg.theme_component(dpg.mvText):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, muted_ink_color, category=dpg.mvThemeCat_Core)
 
     with dpg.window(
         tag="entry window",
@@ -512,110 +598,136 @@ def main():
         pos=(0, 0),
     ):
         dpg.add_text(
-            default_value="请输入要写的英文单词 / Type the text to write",
+            default_value="AISR Robot Writer",
+            tag="app_title",
+            pos=[40, 28],
+        )
+
+        dpg.add_text(
+            default_value="English Stroke Writer",
             tag="main_prompt",
-            pos=[40, 40],
+            pos=[40, 62],
         )
 
         dpg.add_text(
-            default_value=(
-                "当前支持绘制 / Supported characters:\n"
-                + get_english_supported_chars_text()
-            ),
+            default_value="Latin letters, numbers, and symbols",
             tag="sub_prompt",
-            pos=[40, 90],
-            wrap=1100,
+            pos=[40, 92],
+            wrap=500,
         )
 
-        dpg.add_text(
-            default_value=gui_font_message,
-            tag="font_info_text",
-            pos=[40, 170],
-            wrap=1100,
-        )
+        with dpg.child_window(
+            tag="left_panel",
+            pos=[40, 128],
+            width=570,
+            height=540,
+            border=True,
+            no_scrollbar=True,
+        ):
+            dpg.add_text("Compose", tag="compose_title")
 
-        with dpg.group(tag="mode_group", horizontal=True):
-            dpg.add_combo(
-                items=WRITING_MODES,
-                default_value=MODE_ENGLISH,
-                width=260,
-                tag="mode_select",
-                callback=refresh_mode_ui,
+            with dpg.group(tag="mode_group", horizontal=True):
+                dpg.add_combo(
+                    items=WRITING_MODES,
+                    default_value=MODE_ENGLISH,
+                    width=220,
+                    tag="mode_select",
+                    callback=refresh_mode_ui,
+                )
+
+                dpg.add_checkbox(
+                    label="Dry Run",
+                    default_value=True,
+                    tag="dry_run_checkbox",
+                )
+
+            with dpg.group(tag="font_group", horizontal=True, show=False):
+                dpg.add_text(default_value="Source", tag="font_label")
+                dpg.add_combo(
+                    items=AVAILABLE_CHINESE_FONT_NAMES if AVAILABLE_CHINESE_FONT_NAMES else [DEFAULT_CHINESE_FONT],
+                    default_value=DEFAULT_CHINESE_FONT,
+                    width=220,
+                    tag="font_select",
+                    callback=refresh_mode_ui,
+                )
+
+            dpg.add_text(default_value="", tag="mode_note_text", wrap=520)
+            dpg.bind_item_theme("mode_note_text", subtle_text_theme)
+
+            dpg.add_spacer(height=4)
+            dpg.add_text("Text")
+            dpg.add_input_text(
+                tag="input_text",
+                hint="Example: HELLO & ROBOT 2026!",
+                width=520,
+                height=165,
+                multiline=True,
             )
 
-            dpg.add_checkbox(
-                label="Dry Run Only / Nur prüfen",
-                default_value=True,
-                tag="dry_run_checkbox",
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Start Writing",
+                    tag="start_button",
+                    width=250,
+                    height=54,
+                    callback=start_writing_callback,
+                )
+                dpg.add_button(
+                    label="Clear",
+                    tag="clear_button",
+                    width=120,
+                    height=54,
+                    callback=clear_callback,
+                )
+                dpg.add_button(
+                    label="Exit",
+                    tag="exit_button",
+                    width=120,
+                    height=54,
+                    callback=exit_callback,
+                )
+
+            dpg.add_spacer(height=4)
+            dpg.add_text(default_value=gui_font_message, tag="font_info_text", wrap=520)
+            dpg.bind_item_theme("font_info_text", subtle_text_theme)
+
+        with dpg.child_window(
+            tag="preview_panel",
+            pos=[650, 128],
+            width=590,
+            height=245,
+            border=True,
+            no_scrollbar=True,
+        ):
+            dpg.add_text(default_value="Preview", tag="preview_label")
+            dpg.add_spacer(height=6)
+            dpg.add_text(default_value="", tag="preview_text", wrap=540)
+
+        with dpg.child_window(
+            tag="status_panel",
+            pos=[650, 393],
+            width=590,
+            height=275,
+            border=True,
+            no_scrollbar=True,
+        ):
+            dpg.add_text(default_value="Status", tag="status_label")
+            dpg.add_spacer(height=6)
+            dpg.add_text(
+                default_value="等待输入 / Waiting for input.",
+                tag="status_text",
+                wrap=540,
             )
-
-        dpg.set_item_pos("mode_group", [40, 195])
-
-        with dpg.group(tag="font_group", horizontal=True, show=False):
-            dpg.add_text(default_value="字体 / Font:", tag="font_label")
-            dpg.add_combo(
-                items=AVAILABLE_CHINESE_FONT_NAMES if AVAILABLE_CHINESE_FONT_NAMES else [DEFAULT_CHINESE_FONT],
-                default_value=DEFAULT_CHINESE_FONT,
-                width=220,
-                tag="font_select",
-                callback=refresh_mode_ui,
-            )
-
-        dpg.set_item_pos("font_group", [40, 230])
-
-        dpg.add_input_text(
-            tag="input_text",
-            hint="Example: HELLO & ROBOT 2026!",
-            width=630,
-            height=60,
-            pos=[40, 275],
-            multiline=True,
-        )
-
-        dpg.add_button(
-            label="开始写字 / Start Writing",
-            tag="start_button",
-            width=400,
-            height=85,
-            pos=[40, 350],
-            callback=start_writing_callback,
-        )
-
-        dpg.add_button(
-            label="清空 / Clear",
-            tag="clear_button",
-            width=200,
-            height=85,
-            pos=[470, 350],
-            callback=clear_callback,
-        )
-
-        dpg.add_button(
-            label="退出 / Exit",
-            tag="exit_button",
-            width=180,
-            height=85,
-            pos=[700, 350],
-            callback=exit_callback,
-        )
-
-        dpg.add_text(default_value="预览 / Preview:", tag="preview_label", pos=[40, 460])
-        dpg.add_text(default_value="", tag="preview_text", pos=[40, 490], wrap=1100)
-
-        dpg.add_text(default_value="状态 / Status:", tag="status_label", pos=[40, 580])
-        dpg.add_text(
-            default_value="等待输入 / Waiting for input.",
-            tag="status_text",
-            pos=[40, 630],
-            wrap=1100,
-        )
 
         if default_font is not None:
             dpg.bind_font(default_font)
         if small_font is not None:
+            dpg.bind_item_font("app_title", default_font)
             dpg.bind_item_font("main_prompt", small_font)
             dpg.bind_item_font("sub_prompt", small_font)
             dpg.bind_item_font("font_info_text", small_font)
+            dpg.bind_item_font("compose_title", small_font)
+            dpg.bind_item_font("mode_note_text", small_font)
             dpg.bind_item_font("dry_run_checkbox", small_font)
             dpg.bind_item_font("input_text", small_font)
             dpg.bind_item_font("start_button", small_font)
@@ -630,6 +742,15 @@ def main():
             if dpg.does_item_exist("font_select"):
                 dpg.bind_item_font("font_select", small_font)
 
+        dpg.bind_item_theme("left_panel", panel_theme)
+        dpg.bind_item_theme("preview_panel", panel_theme)
+        dpg.bind_item_theme("status_panel", panel_theme)
+        dpg.bind_item_theme("start_button", primary_button_theme)
+        dpg.bind_item_theme("clear_button", secondary_button_theme)
+        dpg.bind_item_theme("exit_button", danger_button_theme)
+        dpg.bind_item_theme("mode_select", selector_theme)
+        if dpg.does_item_exist("font_select"):
+            dpg.bind_item_theme("font_select", selector_theme)
         dpg.bind_item_theme("input_text", input_theme)
 
     dpg.create_viewport(title="Robot Writing GUI", width=screen_width, height=screen_height)
