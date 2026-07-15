@@ -255,13 +255,6 @@ def get_mode_title(mode):
     return "English Stroke Writer"
 
 
-def get_mode_subtitle(mode, font_name):
-    if mode == MODE_CHINESE:
-        glyph_count = len(list_supported_chars(font_name)) if CHINESE_FONT_AVAILABLE else 0
-        return f"{font_name} · {glyph_count} cached glyphs"
-    return "Latin letters, numbers, and symbols"
-
-
 def get_mode_note(mode, font_name):
     if mode == MODE_CHINESE:
         glyph_count = len(list_supported_chars(font_name)) if CHINESE_FONT_AVAILABLE else 0
@@ -498,9 +491,7 @@ def update_gui_from_queue():
 def refresh_mode_ui(sender=None, app_data=None):
     mode = get_current_mode()
     font_name = get_current_chinese_font()
-
-    dpg.set_value("main_prompt", get_mode_title(mode))
-    dpg.set_value("sub_prompt", get_mode_subtitle(mode, font_name))
+    dpg.set_value("compose_title", get_mode_title(mode))
 
     if mode == MODE_CHINESE:
         dpg.configure_item("font_group", show=True)
@@ -585,6 +576,10 @@ def main():
             dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, soft_accent_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_Text, ink_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_Border, soft_accent_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_PopupBg, card_bg_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Header, soft_accent_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, secondary_button_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, secondary_button_active_color, category=dpg.mvThemeCat_Core)
 
     with dpg.theme() as subtle_text_theme:
         with dpg.theme_component(dpg.mvText):
@@ -603,28 +598,15 @@ def main():
             pos=[40, 28],
         )
 
-        dpg.add_text(
-            default_value="English Stroke Writer",
-            tag="main_prompt",
-            pos=[40, 62],
-        )
-
-        dpg.add_text(
-            default_value="Latin letters, numbers, and symbols",
-            tag="sub_prompt",
-            pos=[40, 92],
-            wrap=500,
-        )
-
         with dpg.child_window(
             tag="left_panel",
-            pos=[40, 128],
-            width=570,
+            pos=[40, 86],
+            width=710,
             height=540,
             border=True,
             no_scrollbar=True,
         ):
-            dpg.add_text("Compose", tag="compose_title")
+            dpg.add_text("English Stroke Writer", tag="compose_title")
 
             with dpg.group(tag="mode_group", horizontal=True):
                 dpg.add_combo(
@@ -651,7 +633,7 @@ def main():
                     callback=refresh_mode_ui,
                 )
 
-            dpg.add_text(default_value="", tag="mode_note_text", wrap=520)
+            dpg.add_text(default_value="", tag="mode_note_text", wrap=650)
             dpg.bind_item_theme("mode_note_text", subtle_text_theme)
 
             dpg.add_spacer(height=4)
@@ -659,7 +641,7 @@ def main():
             dpg.add_input_text(
                 tag="input_text",
                 hint="Example: HELLO & ROBOT 2026!",
-                width=520,
+                width=650,
                 height=165,
                 multiline=True,
             )
@@ -668,46 +650,46 @@ def main():
                 dpg.add_button(
                     label="Start Writing",
                     tag="start_button",
-                    width=250,
+                    width=320,
                     height=54,
                     callback=start_writing_callback,
                 )
                 dpg.add_button(
                     label="Clear",
                     tag="clear_button",
-                    width=120,
+                    width=140,
                     height=54,
                     callback=clear_callback,
                 )
                 dpg.add_button(
                     label="Exit",
                     tag="exit_button",
-                    width=120,
+                    width=140,
                     height=54,
                     callback=exit_callback,
                 )
 
             dpg.add_spacer(height=4)
-            dpg.add_text(default_value=gui_font_message, tag="font_info_text", wrap=520)
+            dpg.add_text(default_value=gui_font_message, tag="font_info_text", wrap=650)
             dpg.bind_item_theme("font_info_text", subtle_text_theme)
 
         with dpg.child_window(
             tag="preview_panel",
-            pos=[650, 128],
-            width=590,
-            height=245,
+            pos=[780, 86],
+            width=460,
+            height=220,
             border=True,
             no_scrollbar=True,
         ):
             dpg.add_text(default_value="Preview", tag="preview_label")
             dpg.add_spacer(height=6)
-            dpg.add_text(default_value="", tag="preview_text", wrap=540)
+            dpg.add_text(default_value="", tag="preview_text", wrap=410)
 
         with dpg.child_window(
             tag="status_panel",
-            pos=[650, 393],
-            width=590,
-            height=275,
+            pos=[780, 326],
+            width=460,
+            height=300,
             border=True,
             no_scrollbar=True,
         ):
@@ -716,15 +698,13 @@ def main():
             dpg.add_text(
                 default_value="等待输入 / Waiting for input.",
                 tag="status_text",
-                wrap=540,
+                wrap=410,
             )
 
         if default_font is not None:
             dpg.bind_font(default_font)
         if small_font is not None:
             dpg.bind_item_font("app_title", default_font)
-            dpg.bind_item_font("main_prompt", small_font)
-            dpg.bind_item_font("sub_prompt", small_font)
             dpg.bind_item_font("font_info_text", small_font)
             dpg.bind_item_font("compose_title", small_font)
             dpg.bind_item_font("mode_note_text", small_font)
