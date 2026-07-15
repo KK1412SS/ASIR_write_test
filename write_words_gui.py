@@ -1,4 +1,3 @@
-import json
 import os
 import queue
 import shutil
@@ -9,14 +8,12 @@ from pathlib import Path
 
 import dearpygui.dearpygui as dpg
 
-from chinese_font_provider import list_fonts, list_supported_chars
-from chinese_style_profiles import (
-    DEFAULT_STYLE_NAME,
-    get_style_metadata,
-    list_style_names,
-)
+from chinese_font_provider import list_supported_chars
 from letter_strokes import LETTER_STROKES
 from write_chinese import (
+    DEFAULT_FONT_NAME as DEFAULT_CHINESE_FONT,
+    SUPPORTED_CHINESE_FONT_NAMES,
+    SUPPORTED_CHINESE_STYLE_NAME as DEFAULT_CHINESE_STYLE,
     auto_import_missing_chinese_glyphs,
     draw_chinese_text_with_robot,
     validate_chinese_text,
@@ -36,35 +33,12 @@ OUTPUT_FILE_CHINESE = "./output/text_trail_chinese.txt"
 MODE_ENGLISH = "English Strokes"
 MODE_CHINESE = "Chinese Strokes"
 WRITING_MODES = [MODE_ENGLISH, MODE_CHINESE]
-
-ALL_CHINESE_FONT_NAMES = list_fonts()
-AUTO_IMPORTABLE_CHINESE_FONT_NAMES = {"hanziwriter", "animcjk_zhhans", "animcjk_zhhant"}
-
-
-def get_font_glyph_count(font_name):
-    font_path = Path(__file__).resolve().parent / "fonts" / "chinese" / f"{font_name}.json"
-    try:
-        data = json.loads(font_path.read_text(encoding="utf-8"))
-        return len(data.get("glyphs", {}))
-    except Exception:
-        return 0
-
-
-def get_gui_chinese_font_names():
-    names = []
-    for font_name in ALL_CHINESE_FONT_NAMES:
-        glyph_count = get_font_glyph_count(font_name)
-        if font_name in AUTO_IMPORTABLE_CHINESE_FONT_NAMES or glyph_count >= 100:
-            names.append(font_name)
-    return names
-
-
-CHINESE_FONT_NAMES = get_gui_chinese_font_names()
-DEFAULT_CHINESE_FONT = "hanziwriter" if "hanziwriter" in CHINESE_FONT_NAMES else (
-    CHINESE_FONT_NAMES[0] if CHINESE_FONT_NAMES else ""
-)
-CHINESE_STYLE_NAMES = list_style_names()
-DEFAULT_CHINESE_STYLE = DEFAULT_STYLE_NAME
+AVAILABLE_CHINESE_FONT_NAMES = [
+    font_name
+    for font_name in SUPPORTED_CHINESE_FONT_NAMES
+    if (Path(__file__).resolve().parent / "fonts" / "chinese" / f"{font_name}.json").is_file()
+]
+CHINESE_FONT_AVAILABLE = bool(AVAILABLE_CHINESE_FONT_NAMES)
 
 
 DEFAULT_START_X = 10
@@ -257,16 +231,10 @@ def get_current_mode():
     return MODE_ENGLISH
 
 
-def get_current_font():
+def get_current_chinese_font():
     if dpg.does_item_exist("font_select"):
         return dpg.get_value("font_select")
     return DEFAULT_CHINESE_FONT
-
-
-def get_current_style():
-    if dpg.does_item_exist("style_select"):
-        return dpg.get_value("style_select")
-    return DEFAULT_CHINESE_STYLE
 
 
 def get_english_supported_chars_text():
@@ -286,11 +254,10 @@ def get_english_supported_chars_text():
     return "\n".join(parts)
 
 
-def get_chinese_supported_chars_text(font_name, style_name):
-    if not CHINESE_FONT_NAMES:
-        return "No Chinese stroke fonts are available in ./fonts/chinese."
+def get_chinese_supported_chars_text(font_name):
+    if not CHINESE_FONT_AVAILABLE:
+        return "No supported Chinese stroke fonts are available in ./fonts/chinese."
 
-    style_metadata = get_style_metadata(style_name)
     chars = list_supported_chars(font_name)
     preview = " ".join(chars[:12])
     extra = ""
@@ -298,11 +265,11 @@ def get_chinese_supported_chars_text(font_name, style_name):
         extra = f" ... (+{len(chars) - 12} more)"
 
     return (
-        f"Selected stroke source: {font_name}\n"
-        f"Selected style profile: {style_metadata['display_name']} ({style_name})\n"
+        f"Chinese stroke source: {font_name}\n"
+        f"Style profile: {DEFAULT_CHINESE_STYLE} (fixed)\n"
         f"Local Hanzi cache ({len(chars)} glyphs): {preview}{extra}\n"
         "Space, newline, and common Chinese punctuation are also supported.\n"
-        "Only production-ready Chinese fonts are shown in this GUI."
+        "Available Chinese sources in this GUI: hanziwriter, animcjk_zhhans."
     )
 
 
@@ -325,45 +292,44 @@ def normalize_draw_text(text, mode):
     return text.upper()
 
 
-def draw_worker(text, mode, font_name, style_name, dry_run):
+def draw_worker(text, mode, font_name, dry_run):
     global is_drawing
 
     try:
         is_drawing = True
         if mode == MODE_CHINESE:
-            if font_name in AUTO_IMPORTABLE_CHINESE_FONT_NAMES:
+            set_status(
+                f"检查并补全中文笔画缓存（字体: {font_name}）...\n"
+                f"Checking and extending cached Hanzi strokes ({font_name})..."
+            )
+            imported, skipped = auto_import_missing_chinese_glyphs(
+                text=text,
+                font_name=font_name,
+                skip_missing=True,
+            )
+            if imported:
                 set_status(
-                    f"检查并补全中文笔画缓存（字体: {font_name}, 风格: {style_name}）...\n"
-                    f"Checking and extending cached Hanzi strokes ({font_name}, style {style_name})..."
+                    "已自动导入新汉字："
+                    + "".join(imported)
+                    + "\nAuto-imported Hanzi: "
+                    + "".join(imported)
                 )
-                imported, skipped = auto_import_missing_chinese_glyphs(
-                    text=text,
-                    font_name=font_name,
-                    skip_missing=True,
+            unsupported = validate_chinese_text(text, font_name)
+            if unsupported:
+                raise ValueError(
+                    "These Chinese characters could not be imported automatically: "
+                    + " ".join(unsupported)
                 )
-                if imported:
-                    set_status(
-                        "已自动导入新汉字："
-                        + "".join(imported)
-                        + "\nAuto-imported Hanzi: "
-                        + "".join(imported)
-                    )
-                unsupported = validate_chinese_text(text, font_name)
-                if unsupported:
-                    raise ValueError(
-                        "These Chinese characters could not be imported automatically: "
-                        + " ".join(unsupported)
-                    )
 
             set_status(
-                f"正在准备写中文（字体: {font_name}, 风格: {style_name}）：{text}\n"
-                f"Preparing Chinese writing ({font_name}, style {style_name}): {text}"
+                f"正在准备写中文（字体: {font_name}）：{text}\n"
+                f"Preparing Chinese writing ({font_name}): {text}"
             )
             ok = draw_chinese_text_with_robot(
                 text=text,
                 output_file=OUTPUT_FILE_CHINESE,
                 font_name=font_name,
-                style_name=style_name,
+                style_name=DEFAULT_CHINESE_STYLE,
                 start_x=DEFAULT_CHINESE_START_X,
                 start_y=DEFAULT_CHINESE_START_Y,
                 char_size=DEFAULT_CHINESE_CHAR_SIZE,
@@ -426,19 +392,15 @@ def start_writing_callback(sender=None, app_data=None):
         return
 
     mode = get_current_mode()
-    font_name = get_current_font()
-    style_name = get_current_style()
     draw_text = normalize_draw_text(text, mode)
+    font_name = get_current_chinese_font()
 
     if mode == MODE_CHINESE:
-        if not CHINESE_FONT_NAMES:
+        if not CHINESE_FONT_AVAILABLE:
             set_status("没有可用的中文笔画字体数据。\nNo Chinese stroke fonts are available.")
             return
-        supported_text = get_chinese_supported_chars_text(font_name, style_name)
-        if font_name in AUTO_IMPORTABLE_CHINESE_FONT_NAMES:
-            unsupported = []
-        else:
-            unsupported = validate_chinese_text(draw_text, font_name)
+        supported_text = get_chinese_supported_chars_text(font_name)
+        unsupported = []
     else:
         unsupported = validate_english_text(draw_text)
         supported_text = get_english_supported_chars_text()
@@ -463,7 +425,7 @@ def start_writing_callback(sender=None, app_data=None):
 
     thread = threading.Thread(
         target=draw_worker,
-        args=(draw_text, mode, font_name, style_name, dry_run),
+        args=(draw_text, mode, font_name, dry_run),
     )
     thread.daemon = True
     thread.start()
@@ -492,15 +454,14 @@ def update_gui_from_queue():
 
 def refresh_mode_ui(sender=None, app_data=None):
     mode = get_current_mode()
-    font_name = get_current_font()
-    style_name = get_current_style()
+    font_name = get_current_chinese_font()
 
     if mode == MODE_CHINESE:
         dpg.set_value("main_prompt", "请输入要写的中文 / Type the Chinese text to write")
         dpg.set_value(
             "sub_prompt",
-            "当前支持中文笔画字体 / Supported Chinese stroke fonts:\n"
-            + get_chinese_supported_chars_text(font_name, style_name),
+            "当前中文模式 / Chinese writing mode:\n"
+            + get_chinese_supported_chars_text(font_name),
         )
         dpg.configure_item("font_group", show=True)
         dpg.configure_item("input_text", hint="Example: 你好！")
@@ -592,18 +553,10 @@ def main():
         with dpg.group(tag="font_group", horizontal=True, show=False):
             dpg.add_text(default_value="字体 / Font:", tag="font_label")
             dpg.add_combo(
-                items=CHINESE_FONT_NAMES if CHINESE_FONT_NAMES else [""],
+                items=AVAILABLE_CHINESE_FONT_NAMES if AVAILABLE_CHINESE_FONT_NAMES else [DEFAULT_CHINESE_FONT],
                 default_value=DEFAULT_CHINESE_FONT,
                 width=220,
                 tag="font_select",
-                callback=refresh_mode_ui,
-            )
-            dpg.add_text(default_value="风格 / Style:", tag="style_label")
-            dpg.add_combo(
-                items=CHINESE_STYLE_NAMES,
-                default_value=DEFAULT_CHINESE_STYLE,
-                width=220,
-                tag="style_select",
                 callback=refresh_mode_ui,
             )
 
@@ -673,11 +626,8 @@ def main():
             dpg.bind_item_font("status_text", small_font)
             dpg.bind_item_font("mode_select", small_font)
             dpg.bind_item_font("font_label", small_font)
-            dpg.bind_item_font("style_label", small_font)
             if dpg.does_item_exist("font_select"):
                 dpg.bind_item_font("font_select", small_font)
-            if dpg.does_item_exist("style_select"):
-                dpg.bind_item_font("style_select", small_font)
 
         dpg.bind_item_theme("input_text", input_theme)
 

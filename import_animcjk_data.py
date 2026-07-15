@@ -23,15 +23,6 @@ SOURCE_VARIANTS = {
             "Uses language-specific stroke medians and stroke order."
         ),
     },
-    "zhhant": {
-        "folder": "svgsZhHant",
-        "font_name": "animcjk_zhhant",
-        "display_name": "AnimCJK Traditional Chinese",
-        "description": (
-            "Imported from AnimCJK traditional Chinese SVG median paths. "
-            "Uses language-specific stroke medians and stroke order."
-        ),
-    },
 }
 
 SOURCE_URL_TEMPLATES = [
@@ -52,6 +43,7 @@ REQUEST_HEADERS = {
     "User-Agent": "AISR-AnimCJK-Importer/1.0",
     "Accept": "image/svg+xml,text/plain;q=0.9,*/*;q=0.8",
 }
+ANIMCJK_UNITS_PER_EM = 1024.0
 
 TOKEN_RE = re.compile(r"[MmZzLlHhVvCcSsQqTtAa]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
 
@@ -313,7 +305,7 @@ def load_or_create_font(font_path, variant_name):
         "font_name": variant["font_name"],
         "display_name": variant["display_name"],
         "description": variant["description"],
-        "units_per_em": 1024,
+        "units_per_em": ANIMCJK_UNITS_PER_EM,
         "glyphs": {},
     }
 
@@ -398,13 +390,18 @@ def glyph_from_animcjk_svg(char, svg_text, min_distance, epsilon, curve_steps):
         if len(points) < 2:
             continue
         simplified = simplify_stroke(points, min_distance=min_distance, epsilon=epsilon)
-        strokes.append([[round(x, 3), round(y, 3)] for x, y in simplified])
+        strokes.append(
+            [
+                [round(x, 3), round(ANIMCJK_UNITS_PER_EM - y, 3)]
+                for x, y in simplified
+            ]
+        )
 
     if not strokes:
         raise ValueError(f"No usable strokes extracted from AnimCJK SVG for character: {char}")
 
     return {
-        "advance": 1024,
+        "advance": ANIMCJK_UNITS_PER_EM,
         "strokes": strokes,
         "source": "animcjk",
     }

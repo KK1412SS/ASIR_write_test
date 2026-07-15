@@ -10,7 +10,6 @@ from chinese_font_provider import (
     get_glyph_with_fallback,
     get_units_per_em,
     has_glyph_with_fallback,
-    list_fonts,
 )
 from chinese_style_profiles import DEFAULT_STYLE_NAME, get_style_profile, transform_glyph
 from import_animcjk_data import ensure_text_in_animcjk_font
@@ -24,16 +23,33 @@ VERTICAL_TILT_CENTER = 70.0
 HORIZONTAL_TILT_FACTOR = -0.06
 HORIZONTAL_TILT_CENTER = (-0.35 + -0.15) / 2.0
 
-AVAILABLE_CHINESE_FONTS = set(list_fonts())
-DEFAULT_FONT_NAME = "hanziwriter" if "hanziwriter" in AVAILABLE_CHINESE_FONTS else "kaiti"
-ANIMCJK_FONT_VARIANTS = {
-    "animcjk_zhhans": "zhhans",
-    "animcjk_zhhant": "zhhant",
-}
-AUTO_IMPORTABLE_FONT_NAMES = {"hanziwriter", *ANIMCJK_FONT_VARIANTS.keys()}
+DEFAULT_FONT_NAME = "hanziwriter"
+SUPPORTED_CHINESE_FONT_NAMES = ("hanziwriter", "animcjk_zhhans")
+SUPPORTED_CHINESE_STYLE_NAME = DEFAULT_STYLE_NAME
+
+
+def require_supported_chinese_font(font_name):
+    resolved_font_name = font_name or DEFAULT_FONT_NAME
+    if resolved_font_name not in SUPPORTED_CHINESE_FONT_NAMES:
+        raise ValueError(
+            f"Unsupported Chinese font '{resolved_font_name}'. "
+            f"Supported Chinese fonts: {', '.join(SUPPORTED_CHINESE_FONT_NAMES)}."
+        )
+    return resolved_font_name
+
+
+def require_supported_chinese_style(style_name):
+    resolved_style_name = style_name or SUPPORTED_CHINESE_STYLE_NAME
+    if resolved_style_name != SUPPORTED_CHINESE_STYLE_NAME:
+        raise ValueError(
+            f"Unsupported Chinese style '{resolved_style_name}'. "
+            f"Only '{SUPPORTED_CHINESE_STYLE_NAME}' is enabled in this project."
+        )
+    return resolved_style_name
 
 
 def validate_chinese_text(text, font_name):
+    font_name = require_supported_chinese_font(font_name)
     unsupported = []
     for ch in text:
         if ch in [" ", "\n"]:
@@ -44,8 +60,7 @@ def validate_chinese_text(text, font_name):
 
 
 def auto_import_missing_chinese_glyphs(text, font_name, skip_missing=True):
-    if font_name not in AUTO_IMPORTABLE_FONT_NAMES:
-        return [], []
+    font_name = require_supported_chinese_font(font_name)
 
     unresolved_chars = []
     seen = set()
@@ -62,16 +77,16 @@ def auto_import_missing_chinese_glyphs(text, font_name, skip_missing=True):
         return [], []
 
     unresolved_text = "".join(unresolved_chars)
-    if font_name == "hanziwriter":
-        return ensure_text_in_font(
+    if font_name == "animcjk_zhhans":
+        return ensure_text_in_animcjk_font(
             text=unresolved_text,
-            font_path=DEFAULT_FONT_PATH,
+            variant_name="zhhans",
             skip_missing=skip_missing,
         )
 
-    return ensure_text_in_animcjk_font(
+    return ensure_text_in_font(
         text=unresolved_text,
-        variant_name=ANIMCJK_FONT_VARIANTS[font_name],
+        font_path=DEFAULT_FONT_PATH,
         skip_missing=skip_missing,
     )
 
@@ -97,7 +112,7 @@ def create_chinese_text_file(
     text,
     output_file="./output/text_trail_chinese.txt",
     font_name=DEFAULT_FONT_NAME,
-    style_name=DEFAULT_STYLE_NAME,
+    style_name=SUPPORTED_CHINESE_STYLE_NAME,
     start_x=10.0,
     start_y=70.0,
     char_size=9.0,
@@ -111,6 +126,8 @@ def create_chinese_text_file(
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
+    font_name = require_supported_chinese_font(font_name)
+    style_name = require_supported_chinese_style(style_name)
     get_style_profile(style_name)
     units_per_em = get_units_per_em(font_name)
     scale = char_size / units_per_em
@@ -307,7 +324,7 @@ def draw_chinese_text_with_robot(
     text,
     output_file="./output/text_trail_chinese.txt",
     font_name=DEFAULT_FONT_NAME,
-    style_name=DEFAULT_STYLE_NAME,
+    style_name=SUPPORTED_CHINESE_STYLE_NAME,
     start_x=10.0,
     start_y=70.0,
     char_size=9.0,
@@ -324,6 +341,8 @@ def draw_chinese_text_with_robot(
     auto_wrap=True,
     max_line_width=None,
 ):
+    font_name = require_supported_chinese_font(font_name)
+    style_name = require_supported_chinese_style(style_name)
     get_style_profile(style_name)
 
     if auto_import_missing:
