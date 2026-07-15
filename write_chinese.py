@@ -28,6 +28,27 @@ SUPPORTED_CHINESE_FONT_NAMES = ("hanziwriter", "animcjk_zhhans")
 SUPPORTED_CHINESE_STYLE_NAME = DEFAULT_STYLE_NAME
 
 
+def coerce_float_parameter(name, value):
+    if isinstance(value, bool):
+        raise ValueError(f"Invalid value for {name}: expected a number, got boolean {value!r}")
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        try:
+            return float(stripped)
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid value for {name}: expected a number, got string {value!r}"
+            ) from exc
+
+    raise ValueError(
+        f"Invalid value for {name}: expected a number, got {type(value).__name__} {value!r}"
+    )
+
+
 def require_supported_chinese_font(font_name):
     resolved_font_name = font_name or DEFAULT_FONT_NAME
     if resolved_font_name not in SUPPORTED_CHINESE_FONT_NAMES:
@@ -128,6 +149,14 @@ def create_chinese_text_file(
 
     font_name = require_supported_chinese_font(font_name)
     style_name = require_supported_chinese_style(style_name)
+    start_x = coerce_float_parameter("start_x", start_x)
+    start_y = coerce_float_parameter("start_y", start_y)
+    char_size = coerce_float_parameter("char_size", char_size)
+    char_spacing = coerce_float_parameter("char_spacing", char_spacing)
+    line_spacing = coerce_float_parameter("line_spacing", line_spacing)
+    space_advance_ratio = coerce_float_parameter("space_advance_ratio", space_advance_ratio)
+    if max_line_width is not None:
+        max_line_width = coerce_float_parameter("max_line_width", max_line_width)
     get_style_profile(style_name)
     units_per_em = get_units_per_em(font_name)
     scale = char_size / units_per_em
@@ -343,6 +372,19 @@ def draw_chinese_text_with_robot(
 ):
     font_name = require_supported_chinese_font(font_name)
     style_name = require_supported_chinese_style(style_name)
+    start_x = coerce_float_parameter("start_x", start_x)
+    start_y = coerce_float_parameter("start_y", start_y)
+    char_size = coerce_float_parameter("char_size", char_size)
+    char_spacing = coerce_float_parameter("char_spacing", char_spacing)
+    line_spacing = coerce_float_parameter("line_spacing", line_spacing)
+    x0 = coerce_float_parameter("x0", x0)
+    y0 = coerce_float_parameter("y0", y0)
+    write_h = coerce_float_parameter("write_h", write_h)
+    dh = coerce_float_parameter("dh", dh)
+    image_size = coerce_float_parameter("image_size", image_size)
+    speed = coerce_float_parameter("speed", speed)
+    if max_line_width is not None:
+        max_line_width = coerce_float_parameter("max_line_width", max_line_width)
     get_style_profile(style_name)
 
     if auto_import_missing:
