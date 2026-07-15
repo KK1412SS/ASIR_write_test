@@ -11,7 +11,12 @@ from chinese_font_provider import (
     get_units_per_em,
     has_glyph_with_fallback,
 )
-from chinese_style_profiles import DEFAULT_STYLE_NAME, get_style_profile, transform_glyph
+from chinese_style_profiles import (
+    DEFAULT_STYLE_NAME,
+    get_style_profile,
+    transform_glyph,
+    transform_glyph_for_font_source,
+)
 from import_animcjk_data import ensure_text_in_animcjk_font
 from import_hanzi_writer_data import DEFAULT_FONT_PATH, ensure_text_in_font
 from robot_safety import SafetyBounds, check_position_or_raise
@@ -192,10 +197,9 @@ def create_chinese_text_file(
                     cursor_x += space_advance
                 continue
 
-            glyph = transform_glyph(
-                get_glyph_with_fallback(font_name, ch),
-                style_name=style_name,
-            )
+            glyph = get_glyph_with_fallback(font_name, ch)
+            glyph = transform_glyph_for_font_source(glyph, font_name=font_name)
+            glyph = transform_glyph(glyph, style_name=style_name)
             glyph_advance = glyph.advance * scale + char_spacing
 
             if (

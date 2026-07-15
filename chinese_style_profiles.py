@@ -62,6 +62,24 @@ STYLE_PROFILES = {
     ),
 }
 
+SOURCE_GEOMETRY_PROFILES = {
+    "animcjk_zhhans": ChineseStyleProfile(
+        name="animcjk_zhhans_source",
+        display_name="AnimCJK Simplified Source Geometry",
+        description=(
+            "A slightly narrower, taller, and gently slanted geometry so "
+            "AnimCJK remains visibly distinct from HanziWriter in robot output."
+        ),
+        x_scale=0.88,
+        y_scale=1.10,
+        slant=-0.09,
+        sway=0.010,
+        arch=0.0,
+        end_flick=0.0,
+        advance_scale=0.92,
+    ),
+}
+
 DEFAULT_STYLE_NAME = "regular"
 
 
@@ -124,9 +142,8 @@ def _apply_end_flick(stroke, end_flick):
     return stroke[:-1] + ((x2 + extension_x, y2 + extension_y),)
 
 
-def transform_glyph(glyph, style_name=DEFAULT_STYLE_NAME):
-    profile = get_style_profile(style_name)
-    if style_name == DEFAULT_STYLE_NAME:
+def _transform_glyph_with_profile(glyph, profile):
+    if profile is None:
         return glyph
 
     points = _collect_points(glyph.strokes)
@@ -151,3 +168,16 @@ def transform_glyph(glyph, style_name=DEFAULT_STYLE_NAME):
         advance=glyph.advance * profile.advance_scale,
         strokes=tuple(transformed_strokes),
     )
+
+
+def transform_glyph_for_font_source(glyph, font_name):
+    profile = SOURCE_GEOMETRY_PROFILES.get(font_name)
+    return _transform_glyph_with_profile(glyph, profile)
+
+
+def transform_glyph(glyph, style_name=DEFAULT_STYLE_NAME):
+    profile = get_style_profile(style_name)
+    if style_name == DEFAULT_STYLE_NAME:
+        return glyph
+
+    return _transform_glyph_with_profile(glyph, profile)

@@ -269,7 +269,8 @@ def get_chinese_supported_chars_text(font_name):
         f"Style profile: {DEFAULT_CHINESE_STYLE} (fixed)\n"
         f"Local Hanzi cache ({len(chars)} glyphs): {preview}{extra}\n"
         "Space, newline, and common Chinese punctuation are also supported.\n"
-        "Available Chinese sources in this GUI: hanziwriter, animcjk_zhhans."
+        "Available Chinese sources in this GUI: hanziwriter, animcjk_zhhans.\n"
+        "AnimCJK output is intentionally narrower and taller than HanziWriter."
     )
 
 
